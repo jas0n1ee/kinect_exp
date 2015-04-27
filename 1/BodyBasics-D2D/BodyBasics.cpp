@@ -9,11 +9,7 @@
 #include "resource.h"
 #include "BodyBasics.h"
 
-const int kBufferLength = 2;
-D2D1_POINT_2F left_hand_buffer[kBufferLength];
-D2D1_POINT_2F right_hand_buffer[kBufferLength];
-D2D1_POINT_2F head_buffer[kBufferLength];
-int buffer_length = 0;
+
 
 static const float c_JointThickness = 3.0f;
 static const float c_TrackedBoneThickness = 6.0f;
@@ -78,6 +74,10 @@ CBodyBasics::CBodyBasics() :
 /// </summary>
 CBodyBasics::~CBodyBasics()
 {
+	left_hand_buffer.clear();
+	right_hand_buffer.clear();
+	head_buffer.clear();
+
     DiscardDirect2DResources();
 
     // clean up Direct2D
@@ -368,12 +368,11 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
                             DrawHand(leftHandState, jointPoints[JointType_HandLeft]);
                             DrawHand(rightHandState, jointPoints[JointType_HandRight]);
 							
-							if(buffer_length<kBufferLength-1)
+							if(left_hand_buffer.size()<kBufferLength-1)
 							{
-								left_hand_buffer[buffer_length] = jointPoints[JointType_HandLeft];
-								right_hand_buffer[buffer_length] = jointPoints[JointType_HandRight];
-								head_buffer[buffer_length] = jointPoints[JointType_Head];
-								++buffer_length;
+								left_hand_buffer.push_back(jointPoints[JointType_HandLeft]);
+								right_hand_buffer.push_back(jointPoints[JointType_HandRight]);
+								head_buffer.push_back(jointPoints[JointType_Head]);
 							}
 							else
 							{
@@ -409,15 +408,12 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
 									m_pRenderTarget->FillEllipse(ellipse, m_pBrushHandOpen);
 									keybd_event(VK_LEFT, 0, 0, 0);
 								}
-								for(int ii = 0;ii<kBufferLength-1;++ii)
-								{
-									left_hand_buffer[ii] = left_hand_buffer[ii+1];
-									right_hand_buffer[ii] = right_hand_buffer[ii+1];
-									head_buffer[ii] = head_buffer[ii+1];
-								}
-								left_hand_buffer[kBufferLength-1] = jointPoints[JointType_HandLeft];
-								right_hand_buffer[kBufferLength-1] = jointPoints[JointType_HandRight];
-								head_buffer[kBufferLength-1] = jointPoints[JointType_Head];
+								left_hand_buffer.push_back(jointPoints[JointType_HandLeft]);
+								right_hand_buffer.push_back(jointPoints[JointType_HandRight]);
+								head_buffer.push_back(jointPoints[JointType_Head]);
+								left_hand_buffer.erase(left_hand_buffer.begin());
+								right_hand_buffer.erase(right_hand_buffer.begin());
+								head_buffer.erase(head_buffer.begin());
 							}
                         }
                     }
