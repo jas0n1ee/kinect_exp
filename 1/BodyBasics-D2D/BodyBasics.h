@@ -7,7 +7,7 @@
 #pragma once
 
 #include "resource.h"
-
+#include <vector>
 class CBodyBasics
 {
     static const int        cDepthWidth  = 512;
@@ -50,7 +50,11 @@ public:
     /// <param name="hInstance"></param>
     /// <param name="nCmdShow"></param>
     int                     Run(HINSTANCE hInstance, int nCmdShow);
-
+	static const int kBufferLength = 2;
+	std::vector<D2D1_POINT_2F> left_hand_buffer;
+	std::vector<D2D1_POINT_2F> right_hand_buffer;
+	std::vector<D2D1_POINT_2F> head_buffer;
+	int buffer_length;
 private:
     HWND                    m_hWnd;
     INT64                   m_nStartTime;
