@@ -411,9 +411,12 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
 								left_hand_buffer.push_back(jointPoints[JointType_HandLeft]);
 								right_hand_buffer.push_back(jointPoints[JointType_HandRight]);
 								head_buffer.push_back(jointPoints[JointType_Head]);
-								left_hand_buffer.erase(left_hand_buffer.begin());
-								right_hand_buffer.erase(right_hand_buffer.begin());
-								head_buffer.erase(head_buffer.begin());
+								if(left_hand_buffer.size()==3)
+								{
+									left_hand_buffer.erase(left_hand_buffer.begin());
+									right_hand_buffer.erase(right_hand_buffer.begin());
+									head_buffer.erase(head_buffer.begin());
+								}
 							}
                         }
                     }
@@ -452,7 +455,7 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
         }
 
         WCHAR szStatusMessage[64];
-        StringCchPrintf(szStatusMessage, _countof(szStatusMessage), L" FPS = %0.2f    Time = %I64d", fps, (nTime - m_nStartTime));
+        StringCchPrintf(szStatusMessage, _countof(szStatusMessage), L" FPS = %0.2f    Time = %I64d    Size = %d", fps, (nTime - m_nStartTime),left_hand_buffer.size());
 
         if (SetStatusMessage(szStatusMessage, 1000, false))
         {
