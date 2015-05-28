@@ -8,14 +8,15 @@
 #include <strsafe.h>
 #include "resource.h"
 #include "BodyBasics.h"
+#include "exp.h"
 static const float c_JointThickness = 3.0f;
 static const float c_TrackedBoneThickness = 6.0f;
 static const float c_InferredBoneThickness = 1.0f;
 static const float c_HandSize = 30.0f;
 
 //#define DEPTHSTREAMOUT
-#define COLORSTREAMOUT
-
+//#define COLORSTREAMOUT
+//#define ALWAYSLOG
 /// <summary>
 /// Entry point for the application
 /// </summary>
@@ -62,7 +63,8 @@ CBodyBasics::CBodyBasics() :
     m_pBrushHandLasso(NULL),
 	m_pDepthFrameReader(NULL),
 	m_pColorFrameReader(NULL),
-	m_pColorRGBX(NULL)
+	m_pColorRGBX(NULL),
+	m_bCapture(false)
 {
     LARGE_INTEGER qpf = {0};
     if (QueryPerformanceFrequency(&qpf))
@@ -71,8 +73,8 @@ CBodyBasics::CBodyBasics() :
     }
 	// create heap storage for color pixel data in RGBX format
 	m_pColorRGBX = new RGBQUAD[cColorWidth * cColorHeight];
-	fopen_s(&colorstream,"colorstream.yuv","wb");
-	fopen_s(&depthstream,"depthstream.stream","wb");
+	fopen_s(&colorstream,"./data/colorstream.yuv","wb");
+	fopen_s(&depthstream,"./data/depthstream.stream","wb");
 }
   
 
@@ -241,7 +243,10 @@ void CBodyBasics::Update()
                 hr = E_FAIL;
             }
         }
-
+#ifdef ALWAYSLOG
+		m_bCapture = true;
+		m_nCaptureNum = 2;
+#endif
 		
 		//write YUV stream
 #ifdef COLORSTREAMOUT
@@ -415,6 +420,14 @@ LRESULT CALLBACK CBodyBasics::DlgProc(HWND hWnd, UINT message, WPARAM wParam, LP
             // Quit the main message pump
             PostQuitMessage(0);
             break;
+        case WM_COMMAND:
+            // If it was for the screenshot control and a button clicked event, save a screenshot next frame 
+            if (IDC_BUTTON1 == LOWORD(wParam) && BN_CLICKED == HIWORD(wParam))
+            {
+				m_bCapture = true;
+				m_nCaptureNum = 1000;
+            }
+            break;
     }
 
     return FALSE;
@@ -514,7 +527,7 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
     if (m_hWnd)
     {
         HRESULT hr = EnsureDirect2DResources();
-
+		float x,y;
         if (SUCCEEDED(hr) && m_pRenderTarget && m_pCoordinateMapper)
         {
             m_pRenderTarget->BeginDraw();
@@ -524,7 +537,9 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
             GetClientRect(GetDlgItem(m_hWnd, IDC_VIDEOVIEW), &rct);
             int width = rct.right;
             int height = rct.bottom;
-
+			FILE * sensor_data;
+			
+			fopen_s(&sensor_data,"./data/sensor.dat","ab");
             for (int i = 0; i < nBodyCount; ++i)
             {
                 IBody* pBody = ppBodies[i];
@@ -537,29 +552,37 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
                     {
                         Joint joints[JointType_Count]; 
                         D2D1_POINT_2F jointPoints[JointType_Count];
-                        HandState leftHandState = HandState_Unknown;
-                        HandState rightHandState = HandState_Unknown;
-
-                        pBody->get_HandLeftState(&leftHandState);
-                        pBody->get_HandRightState(&rightHandState);
-
                         hr = pBody->GetJoints(_countof(joints), joints);
                         if (SUCCEEDED(hr))
                         {
+							kinectdata data;
+							int tracked_num=0;
                             for (int j = 0; j < _countof(joints); ++j)
                             {
                                 jointPoints[j] = BodyToScreen(joints[j].Position, width, height);
-                            }
-
-                            DrawBody(joints, jointPoints);
-
-                            DrawHand(leftHandState, jointPoints[JointType_HandLeft]);
-                            DrawHand(rightHandState, jointPoints[JointType_HandRight]);
+								data.Body_x[j]=	jointPoints[j].x;
+								data.Body_y[j]=	jointPoints[j].y;
+								data.Body_depth[j]=	joints[j].Position.Z*100;
+								tracked_num+=joints[j].TrackingState;
+							}
+							data.tracked_num=tracked_num;
+							data.Body_index=i;
+							data.Time=nTime;
+							x=jointPoints[JointType_Head].x;
+							y=jointPoints[JointType_Head].y;
+							if(tracked_num >= 44)
+							{
+								if(m_bCapture && (--m_nCaptureNum) )
+									fwrite(&data,sizeof(data),1,sensor_data);
+								if(!m_nCaptureNum)
+									m_bCapture = false;
+							}
+							DrawBody(joints, jointPoints);
                         }
                     }
                 }
             }
-
+			fclose(sensor_data);
             hr = m_pRenderTarget->EndDraw();
 
             // Device lost, need to recreate the render target
@@ -584,19 +607,15 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
             if (QueryPerformanceCounter(&qpcNow))
             {
                 if (m_nLastCounter)
-                {
+                {  
                     m_nFramesSinceUpdate++;
                     fps = m_fFreq * m_nFramesSinceUpdate / double(qpcNow.QuadPart - m_nLastCounter);
                 }
             }
         }
-		FILE *test;
-		test=fopen("log.txt","w+");
-        fprintf(test,"test\n");
-		fclose(test);
 		WCHAR szStatusMessage[64];
-        StringCchPrintf(szStatusMessage, _countof(szStatusMessage), L" FPS = %0.2f    Time = %I64d", fps, (nTime - m_nStartTime));
-		StringCchPrintf(szStatusMessage, _countof(szStatusMessage), L" FPS = %0.2f    Time = %I64d\n", fps, (nTime - m_nStartTime));
+		StringCchPrintf(szStatusMessage, _countof(szStatusMessage), L"H.x = %0.2f   H.y = %0.2f  Cap:%d",x,y,m_nCaptureNum);
+		//StringCchPrintf(szStatusMessage, _countof(szStatusMessage), L" FPS = %0.2f    Time = %I64d\n", fps, (nTime - m_nStartTime));
         if (SetStatusMessage(szStatusMessage, 1000, false))
         {
             m_nLastCounter = qpcNow.QuadPart;

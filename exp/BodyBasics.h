@@ -60,7 +60,8 @@ private:
     double                  m_fFreq;
     INT64                   m_nNextStatusTime;
     DWORD                   m_nFramesSinceUpdate;
-
+    bool                    m_bCapture;
+	int						m_nCaptureNum;
     // Current Kinect
     IKinectSensor*          m_pKinectSensor;
     ICoordinateMapper*      m_pCoordinateMapper;
