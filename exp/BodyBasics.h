@@ -90,7 +90,8 @@ private:
 
 	FILE * colorstream;
 	FILE * depthstream;
-    /// <summary>
+    int sensor_data_cnt;
+	/// <summary>
     /// Main processing function
     /// </summary>
     void                    Update();

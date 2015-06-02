@@ -64,7 +64,8 @@ CBodyBasics::CBodyBasics() :
 	m_pDepthFrameReader(NULL),
 	m_pColorFrameReader(NULL),
 	m_pColorRGBX(NULL),
-	m_bCapture(false)
+	m_bCapture(false),
+	sensor_data_cnt(0)
 {
     LARGE_INTEGER qpf = {0};
     if (QueryPerformanceFrequency(&qpf))
@@ -426,6 +427,7 @@ LRESULT CALLBACK CBodyBasics::DlgProc(HWND hWnd, UINT message, WPARAM wParam, LP
             {
 				m_bCapture = true;
 				m_nCaptureNum = 1000;
+				sensor_data_cnt++;
             }
             break;
     }
@@ -538,8 +540,10 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
             int width = rct.right;
             int height = rct.bottom;
 			FILE * sensor_data;
-			
-			fopen_s(&sensor_data,"./data/sensor.dat","ab");
+			char filename[]="./data/sensor00.dat";
+			filename[13]+=sensor_data_cnt/10;
+			filename[14]+=sensor_data_cnt%10;
+			fopen_s(&sensor_data,filename,"ab");
             for (int i = 0; i < nBodyCount; ++i)
             {
                 IBody* pBody = ppBodies[i];
