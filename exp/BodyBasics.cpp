@@ -6,16 +6,17 @@
 
 #include "stdafx.h"
 #include <strsafe.h>
+#include <ctime>
+#include <cstring>
 #include "resource.h"
 #include "BodyBasics.h"
+#include "datetimeapi.h"
 #include "exp.h"
 static const float c_JointThickness = 3.0f;
 static const float c_TrackedBoneThickness = 6.0f;
 static const float c_InferredBoneThickness = 1.0f;
 static const float c_HandSize = 30.0f;
 
-//#define DEPTHSTREAMOUT
-//#define COLORSTREAMOUT
 //#define ALWAYSLOG
 /// <summary>
 /// Entry point for the application
@@ -74,8 +75,8 @@ CBodyBasics::CBodyBasics() :
     }
 	// create heap storage for color pixel data in RGBX format
 	m_pColorRGBX = new RGBQUAD[cColorWidth * cColorHeight];
-	fopen_s(&colorstream,"./data/colorstream.yuv","wb");
-	fopen_s(&depthstream,"./data/depthstream.stream","wb");
+	//fopen_s(&colorstream,"./data/colorstream.yuv","wb");
+	//fopen_s(&depthstream,"./data/depthstream.stream","wb");
 }
   
 
@@ -244,41 +245,39 @@ void CBodyBasics::Update()
                 hr = E_FAIL;
             }
         }
-#ifdef ALWAYSLOG
-		m_bCapture = true;
-		m_nCaptureNum = 2;
-#endif
+
 		
 		//write YUV stream
-#ifdef COLORSTREAMOUT
-		for(int i=0;i<cColorHeight;i+=2)
+		if(m_bCapture)
 		{
-			for(int j=0;j<cColorWidth;j+=2)
+			for(int i=0;i<cColorHeight;i+=2)
 			{
-				RGBQUAD pix=pBuffer2[i*cColorWidth+j];
-				BYTE temp=BYTE(0.299*double(pix.rgbRed)+0.587*double(pix.rgbGreen)+0.114*double(pix.rgbBlue));
-				fwrite(&temp,sizeof(BYTE),1,colorstream);
+				for(int j=0;j<cColorWidth;j+=2)
+				{
+					RGBQUAD pix=pBuffer2[i*cColorWidth+j];
+					BYTE temp=BYTE(0.299*double(pix.rgbRed)+0.587*double(pix.rgbGreen)+0.114*double(pix.rgbBlue));
+					fwrite(&temp,sizeof(BYTE),1,colorstream);
+				}
+			}
+			for(int i=0;i<cColorHeight;i+=4)
+			{
+				for(int j=0;j<cColorWidth;j+=4)
+				{
+					RGBQUAD pix=pBuffer2[i*cColorWidth+j];
+					BYTE temp=BYTE(128-0.169*double(pix.rgbRed)-0.331*double(pix.rgbGreen)+0.5*double(pix.rgbBlue));
+					fwrite(&temp,sizeof(BYTE),1,colorstream);
+				}
+			}
+			for(int i=0;i<cColorHeight;i+=4)
+			{
+				for(int j=0;j<cColorWidth;j+=4)
+				{
+					RGBQUAD pix=pBuffer2[i*cColorWidth+j];
+					BYTE temp=BYTE(128+0.5*double(pix.rgbRed)-0.419*double(pix.rgbGreen)-0.081*double(pix.rgbBlue));
+					fwrite(&temp,sizeof(BYTE),1,colorstream);
+				}	
 			}
 		}
-		for(int i=0;i<cColorHeight;i+=4)
-		{
-			for(int j=0;j<cColorWidth;j+=4)
-			{
-				RGBQUAD pix=pBuffer2[i*cColorWidth+j];
-				BYTE temp=BYTE(128-0.169*double(pix.rgbRed)-0.331*double(pix.rgbGreen)+0.5*double(pix.rgbBlue));
-				fwrite(&temp,sizeof(BYTE),1,colorstream);
-			}
-		}
-		for(int i=0;i<cColorHeight;i+=4)
-		{
-			for(int j=0;j<cColorWidth;j+=4)
-			{
-				RGBQUAD pix=pBuffer2[i*cColorWidth+j];
-				BYTE temp=BYTE(128+0.5*double(pix.rgbRed)-0.419*double(pix.rgbGreen)-0.081*double(pix.rgbBlue));
-				fwrite(&temp,sizeof(BYTE),1,colorstream);
-			}
-		}
-#endif
 
 		hr = pDepthFrame->get_RelativeTime(&nTime);
         if (SUCCEEDED(hr))
@@ -316,10 +315,6 @@ void CBodyBasics::Update()
             hr = pDepthFrame->AccessUnderlyingBuffer(&nBufferSize, &pBuffer);            
         }
 
-#ifdef DEPTHSTREAMOUT
-		if(pBuffer)
-			fwrite(pBuffer,sizeof(UINT16),cDepthWidth*cDepthHeight,depthstream);
-#endif
 
         
 
@@ -425,10 +420,27 @@ LRESULT CALLBACK CBodyBasics::DlgProc(HWND hWnd, UINT message, WPARAM wParam, LP
             // If it was for the screenshot control and a button clicked event, save a screenshot next frame 
             if (IDC_BUTTON1 == LOWORD(wParam) && BN_CLICKED == HIWORD(wParam))
             {
-				m_bCapture = true;
-				m_nCaptureNum = 1000;
-				sensor_data_cnt++;
-            }
+
+				if(!m_bCapture)
+				{
+					std::time_t rawtime;
+					std::tm* timeinfo;
+					char buffer [80];
+					std::time(&rawtime);
+					timeinfo = std::localtime(&rawtime);
+					std::strftime(buffer,80,"%Y-%m-%d-%H-%M-%S",timeinfo);
+					char filename[256]={0};
+					sprintf(filename,"./data/%s.yuv",buffer);
+					int err=fopen_s(&colorstream,filename,"wb");
+					// File name will be HH-MM-SS.yuv
+					m_bCapture=!m_bCapture;
+				}
+				else
+				{
+					m_bCapture=!m_bCapture;
+					fclose(colorstream);
+				}
+			}
             break;
     }
 
@@ -540,7 +552,7 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
             int width = rct.right;
             int height = rct.bottom;
 			FILE * sensor_data;
-			char filename[]="./data/sensor00.dat";
+			char filename[]="./data/sensor_monitor.dat";
 			filename[13]+=sensor_data_cnt/10;
 			filename[14]+=sensor_data_cnt%10;
 			fopen_s(&sensor_data,filename,"ab");
@@ -576,10 +588,7 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
 							y=jointPoints[JointType_Head].y;
 							if(tracked_num >= 44)
 							{
-								if(m_bCapture && (--m_nCaptureNum) )
-									fwrite(&data,sizeof(data),1,sensor_data);
-								if(!m_nCaptureNum)
-									m_bCapture = false;
+								fwrite(&data,sizeof(data),1,sensor_data);
 							}
 							DrawBody(joints, jointPoints);
                         }
@@ -618,7 +627,7 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
             }
         }
 		WCHAR szStatusMessage[64];
-		StringCchPrintf(szStatusMessage, _countof(szStatusMessage), L"H.x = %0.2f   H.y = %0.2f  Cap:%d",x,y,m_nCaptureNum);
+		StringCchPrintf(szStatusMessage, _countof(szStatusMessage), L"CAPTURE:O%c",(m_bCapture)?'N':'F');
 		//StringCchPrintf(szStatusMessage, _countof(szStatusMessage), L" FPS = %0.2f    Time = %I64d\n", fps, (nTime - m_nStartTime));
         if (SetStatusMessage(szStatusMessage, 1000, false))
         {
